@@ -1,0 +1,1108 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>日薪实时计算器</title>
+<style>
+/* SECTION: theme tokens
+   所有颜色只从这组变量取值；切换深浅主题时文字、图标、进度条、输入控件全部跟随换色 */
+body {
+  --bg-a: #16233d; --bg-b: #0b1120; --bg-c: #070b14;
+  --text: #e8edf6;
+  --muted: #b9c4d6;
+  --faint: #8f9bb0;
+  --win-bg: rgba(17, 24, 39, .55);
+  --win-border: rgba(255, 255, 255, .14);
+  --win-shadow: 0 18px 50px rgba(0, 0, 0, .45);
+  --bar-bg: linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,0));
+  --bar-border: rgba(255, 255, 255, .08);
+  --btn-bg: rgba(255, 255, 255, .08);
+  --btn-border: rgba(255, 255, 255, .16);
+  --btn-hover: rgba(255, 255, 255, .18);
+  --money-1: #ffe9a8; --money-2: #ffd76a; --money-3: #f5a623;
+  --money-glow: rgba(245, 166, 35, .35);
+  --gold: #ffd76a;
+  --green: #4ade80;
+  --danger: #f87171;
+  --card-bg: rgba(255, 255, 255, .06);
+  --card-border: rgba(255, 255, 255, .08);
+  --track-bg: rgba(255, 255, 255, .12);
+  --blue-1: #3b82f6; --blue-2: #60a5fa;
+  --blue-glow: rgba(59, 130, 246, .55);
+  --dash-border: rgba(255, 255, 255, .14);
+  --panel-bg: rgba(22, 30, 48, .92);
+  --panel-border: rgba(255, 255, 255, .14);
+  --panel-shadow: 0 24px 70px rgba(0, 0, 0, .55);
+  --overlay-bg: rgba(5, 8, 15, .55);
+  --input-bg: rgba(255, 255, 255, .07);
+  --input-border: rgba(255, 255, 255, .18);
+  --logo-1: #ffd76a; --logo-2: #f5a623;
+  color-scheme: dark;
+}
+body[data-theme="light"] {
+  --bg-a: #ffffff; --bg-b: #e9eef7; --bg-c: #dfe6f2;
+  --text: #1c2740;
+  --muted: #4a5872;
+  --faint: #64738d;
+  --win-bg: rgba(255, 255, 255, .78);
+  --win-border: rgba(255, 255, 255, .95);
+  --win-shadow: 0 14px 38px rgba(80, 100, 140, .3);
+  --bar-bg: rgba(245, 248, 253, .6);
+  --bar-border: rgba(30, 50, 90, .1);
+  --btn-bg: rgba(30, 50, 90, .07);
+  --btn-border: rgba(30, 50, 90, .18);
+  --btn-hover: rgba(30, 50, 90, .14);
+  --money-1: #c98a12; --money-2: #a86a08; --money-3: #82520a;
+  --money-glow: rgba(180, 120, 20, .28);
+  --gold: #96650a;
+  --green: #0d7a3c;
+  --danger: #c0392b;
+  --card-bg: rgba(30, 50, 90, .05);
+  --card-border: rgba(30, 50, 90, .12);
+  --track-bg: rgba(30, 50, 90, .12);
+  --blue-1: #1d4ed8; --blue-2: #3b82f6;
+  --blue-glow: rgba(29, 78, 216, .35);
+  --dash-border: rgba(30, 50, 90, .18);
+  --panel-bg: rgba(255, 255, 255, .98);
+  --panel-border: rgba(30, 50, 90, .14);
+  --panel-shadow: 0 20px 50px rgba(80, 100, 140, .35);
+  --overlay-bg: rgba(120, 135, 160, .4);
+  --input-bg: #ffffff;
+  --input-border: rgba(30, 50, 90, .22);
+  --logo-1: #f5b525; --logo-2: #d9880a;
+  color-scheme: light;
+}
+
+/* SECTION: base */
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; min-height: 100%; }
+body {
+  font-family: "Segoe UI", "Microsoft YaHei", system-ui, -apple-system, sans-serif;
+  background: radial-gradient(1200px 700px at 15% 10%, var(--bg-a) 0%, var(--bg-b) 55%, var(--bg-c) 100%);
+  color: var(--text);
+  overflow-x: hidden;
+  transition: background .4s ease, color .3s ease;
+}
+
+/* SECTION: frame (floating window) */
+#frame {
+  position: absolute;
+  top: 24px; left: 24px;
+  width: min(380px, calc(100vw - 32px));
+  z-index: 10;
+}
+.win {
+  border-radius: 18px;
+  overflow: hidden;
+  border: 1px solid var(--win-border);
+  background: var(--win-bg);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  backdrop-filter: blur(18px) saturate(140%);
+  box-shadow: var(--win-shadow);
+  transition: background .4s ease, box-shadow .4s ease, border-color .4s ease;
+}
+
+/* SECTION: drag bar */
+.drag-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px;
+  padding: 12px 14px 10px;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  background: var(--bar-bg);
+  border-bottom: 1px solid var(--bar-border);
+}
+body[data-theme="light"] .drag-bar { background: var(--bar-bg); }
+.drag-bar:active { cursor: grabbing; }
+.slogan {
+  font-size: 14px; font-weight: 700; letter-spacing: .5px;
+  display: flex; align-items: center; gap: 7px; min-width: 0;
+  color: var(--text);
+}
+.slogan .logo {
+  width: 20px; height: 20px; flex: none;
+  border-radius: 6px;
+  background: linear-gradient(135deg, var(--logo-1), var(--logo-2));
+  box-shadow: 0 2px 8px var(--money-glow);
+}
+.bar-btns { display: flex; gap: 6px; flex: none; }
+.icon-btn {
+  width: 30px; height: 30px;
+  border-radius: 8px;
+  border: 1px solid var(--btn-border);
+  background: var(--btn-bg);
+  color: var(--text);
+  font-size: 13px; line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  transition: background .2s ease, transform .1s ease, color .3s ease;
+  touch-action: none;
+}
+.icon-btn:hover { background: var(--btn-hover); }
+.icon-btn:active { transform: scale(.92); }
+
+/* SECTION: content */
+.content { padding: 14px 18px 16px; }
+.datetime {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 8px;
+  font-size: 12.5px; letter-spacing: .5px;
+  color: var(--muted);
+}
+.datetime .time { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--text); }
+
+/* SECTION: status row */
+.status-row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; margin-top: 10px;
+  font-size: 13px;
+}
+.status {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-weight: 600; min-width: 0;
+  color: var(--text);
+}
+.dot {
+  width: 9px; height: 9px; border-radius: 50%;
+  flex: none;
+  background: var(--faint);
+}
+.dot.working { background: #22c55e; box-shadow: 0 0 8px rgba(34,197,94,.8); animation: pulse 1.6s infinite; }
+.dot.lunch   { background: #eab308; box-shadow: 0 0 8px rgba(234,179,8,.7); }
+.dot.off     { background: #ef4444; box-shadow: 0 0 8px rgba(239,68,68,.6); }
+.dot.idle    { background: var(--faint); }
+@keyframes pulse { 0%,100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.35); opacity: .65; } }
+.countdown { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 12.5px; }
+
+/* SECTION: money */
+.money-block { text-align: center; margin: 14px 0 6px; }
+.money-label { font-size: 12px; letter-spacing: 2px; color: var(--muted); }
+.money {
+  font-family: "Consolas", "SF Mono", ui-monospace, monospace;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  font-size: clamp(30px, 10.5vw, 44px);
+  line-height: 1.15;
+  background: linear-gradient(180deg, var(--money-1) 0%, var(--money-2) 45%, var(--money-3) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 2px 10px var(--money-glow));
+  white-space: nowrap;
+}
+.money .rmb { font-size: .55em; vertical-align: baseline; margin-right: 2px; }
+.money-sub { font-size: 11.5px; color: var(--faint); margin-top: 2px; }
+
+/* SECTION: wish list（多个心愿） */
+.wish-list { margin-top: 12px; }
+.wish-list .wish { margin-top: 8px; }
+.wish {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  transition: background .3s ease, border-color .3s ease;
+}
+.wish:first-child { margin-top: 0; }
+.wish-head {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
+  font-size: 12.5px;
+}
+.wish-name { font-weight: 700; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+.wish-pct { color: var(--gold); font-weight: 700; font-variant-numeric: tabular-nums; flex: none; }
+.wish-goal { font-size: 11px; color: var(--faint); margin-top: 3px; }
+.mini-track {
+  margin-top: 7px; height: 6px; border-radius: 4px;
+  background: var(--track-bg);
+  overflow: hidden;
+}
+.mini-fill {
+  height: 100%; width: 0%;
+  border-radius: 4px;
+  background: linear-gradient(90deg, var(--money-2), var(--money-3));
+  transition: width .5s ease;
+}
+.wish.done .mini-fill { background: linear-gradient(90deg, #22c55e, var(--green)); }
+.wish.done .wish-pct { color: var(--green); }
+
+/* SECTION: fun conversion（趣味折算） */
+.fun-block { margin-top: 13px; }
+.fun-title {
+  font-size: 11.5px; color: var(--muted);
+  margin-bottom: 7px; letter-spacing: .5px;
+}
+.fun { display: flex; flex-wrap: wrap; gap: 7px; }
+.fun-pill {
+  display: inline-flex; align-items: baseline; gap: 4px;
+  padding: 6px 11px;
+  border-radius: 999px;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  font-size: 11.5px;
+  color: var(--muted);
+  max-width: 100%;
+  transition: background .3s ease, border-color .3s ease, color .3s ease;
+}
+.fun-pill .fun-emoji { flex: none; align-self: center; }
+.fun-pill .fun-num {
+  font-family: "Consolas", ui-monospace, monospace;
+  font-weight: 800; font-size: 13.5px;
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+}
+.fun-pill .fun-post { flex: none; }
+
+/* fun editor rows */
+.edit-row {
+  display: grid;
+  grid-template-columns: 34px 42px minmax(0, 1fr) 40px 70px 28px;
+  gap: 5px; align-items: end;
+  margin-bottom: 8px;
+}
+.edit-row input {
+  width: 100%; min-height: 38px;
+  border-radius: 9px;
+  border: 1px solid var(--input-border);
+  background: var(--input-bg);
+  color: var(--text);
+  padding: 6px;
+  font-size: 14px; font-family: inherit;
+  min-width: 0;
+}
+.edit-row input:focus { outline: 2px solid var(--blue-1); border-color: transparent; }
+.er-del {
+  width: 32px; height: 38px;
+  border-radius: 9px;
+  border: 1px solid var(--btn-border);
+  background: var(--btn-bg);
+  color: var(--danger);
+  font-size: 13px; font-weight: 700;
+  cursor: pointer;
+}
+.er-del:hover { background: var(--btn-hover); }
+.edit-head { margin-bottom: 6px; align-items: start; }
+.edit-head > span {
+  font-size: 11px; color: var(--faint);
+  letter-spacing: .5px;
+  padding-left: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* SECTION: work progress */
+.progress-block { margin-top: 14px; }
+.progress-head {
+  display: flex; justify-content: space-between;
+  font-size: 12px; color: var(--muted);
+  margin-bottom: 6px;
+}
+.track {
+  height: 10px; border-radius: 6px;
+  background: var(--track-bg);
+  overflow: hidden;
+}
+.fill {
+  height: 100%; width: 0%;
+  border-radius: 6px;
+  background: linear-gradient(90deg, var(--blue-1), var(--blue-2));
+  box-shadow: 0 0 10px var(--blue-glow);
+  transition: width .35s linear;
+}
+
+/* SECTION: month income */
+.month {
+  margin-top: 13px;
+  display: flex; justify-content: space-between; align-items: baseline;
+  gap: 8px;
+  font-size: 12.5px;
+  padding-top: 11px;
+  border-top: 1px dashed var(--dash-border);
+  color: var(--muted);
+}
+.month .amt {
+  font-family: "Consolas", ui-monospace, monospace;
+  font-weight: 800; font-size: 17px;
+  color: var(--green);
+  font-variant-numeric: tabular-nums;
+}
+
+/* SECTION: footer setting button */
+.settings-entry { margin-top: 14px; display: flex; gap: 8px; }
+.wide-btn {
+  flex: 1;
+  min-height: 42px;
+  border-radius: 11px;
+  border: 1px solid var(--btn-border);
+  background: var(--btn-bg);
+  color: var(--text);
+  font-size: 13px; font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background .2s ease, transform .1s ease, color .3s ease;
+}
+.wide-btn:hover { background: var(--btn-hover); }
+.wide-btn:active { transform: scale(.97); }
+
+/* SECTION: modal settings */
+.overlay {
+  position: fixed; inset: 0;
+  background: var(--overlay-bg);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+  display: none;
+  align-items: center; justify-content: center;
+  padding: 16px;
+  z-index: 50;
+}
+.overlay.open { display: flex; }
+.panel {
+  width: min(440px, 100%);
+  max-height: min(88vh, 760px);
+  overflow-y: auto;
+  border-radius: 16px;
+  padding: 18px;
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  color: var(--text);
+  box-shadow: var(--panel-shadow);
+}
+.panel h2 { margin: 0 0 4px; font-size: 17px; color: var(--text); }
+.panel .tip { margin: 0 0 12px; font-size: 11.5px; color: var(--faint); }
+.field-group { margin-bottom: 14px; }
+.field-group .g-title { font-size: 12px; font-weight: 700; letter-spacing: 1px; color: var(--muted); margin-bottom: 7px; }
+.f-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+.f { margin-bottom: 8px; min-width: 0; }
+.f label { display: block; font-size: 11.5px; color: var(--muted); margin-bottom: 4px; }
+.f input {
+  width: 100%;
+  min-height: 38px;
+  border-radius: 9px;
+  border: 1px solid var(--input-border);
+  background: var(--input-bg);
+  color: var(--text);
+  padding: 6px 10px;
+  font-size: 15px;
+  font-family: inherit;
+}
+.f input:focus { outline: 2px solid var(--blue-1); border-color: transparent; }
+.theme-switch { display: flex; gap: 8px; }
+.theme-switch .wide-btn.active { border-color: var(--blue-1); background: var(--blue-glow); box-shadow: inset 0 0 0 1px var(--blue-1); }
+
+/* wish editor rows */
+.wish-edit {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(88px, 120px) 40px;
+  gap: 6px; align-items: end;
+  margin-bottom: 8px;
+}
+.wish-edit input {
+  width: 100%; min-height: 38px;
+  border-radius: 9px;
+  border: 1px solid var(--input-border);
+  background: var(--input-bg);
+  color: var(--text);
+  padding: 6px 8px;
+  font-size: 14px; font-family: inherit;
+  min-width: 0;
+}
+.wish-edit input:focus { outline: 2px solid var(--blue-1); border-color: transparent; }
+.we-label { display: none; }
+.we-del {
+  width: 40px; height: 38px;
+  flex: none;
+  border-radius: 9px;
+  border: 1px solid var(--btn-border);
+  background: var(--btn-bg);
+  color: var(--danger);
+  font-size: 14px; font-weight: 700;
+  cursor: pointer;
+}
+.we-del:hover { background: var(--btn-hover); }
+.add-wish {
+  width: 100%; min-height: 38px;
+  border-radius: 9px;
+  border: 1px dashed var(--btn-border);
+  background: transparent;
+  color: var(--text);
+  font-size: 13px; font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+}
+.add-wish:hover { background: var(--btn-hover); }
+
+.panel-actions { display: flex; gap: 8px; margin-top: 14px; }
+.btn-primary {
+  flex: 1; min-height: 44px;
+  border: none; border-radius: 11px;
+  background: linear-gradient(90deg, var(--blue-1), var(--blue-2));
+  color: #fff; font-size: 14px; font-weight: 700; cursor: pointer;
+  font-family: inherit;
+}
+.btn-ghost {
+  flex: 1; min-height: 44px;
+  border-radius: 11px;
+  border: 1px solid var(--btn-border);
+  background: transparent; color: var(--text);
+  font-size: 14px; cursor: pointer;
+  font-family: inherit;
+}
+.btn-ghost:hover { background: var(--btn-hover); }
+.err { font-size: 12px; color: var(--danger); min-height: 16px; margin-top: 6px; }
+
+/* SECTION: hint */
+.hint {
+  margin-top: 12px; text-align: center;
+  font-size: 11px; color: var(--faint);
+  user-select: none;
+}
+@media (min-width: 700px) {
+  .hint { position: fixed; left: 0; right: 0; bottom: 10px; margin-top: 0; }
+}
+</style>
+</head>
+<body data-theme="dark">
+
+<!-- SECTION: frame markup -->
+<div id="frame">
+  <div class="win">
+    <div class="drag-bar" id="dragBar">
+      <div class="slogan"><span class="logo"></span><span>打工实时薪资显示器</span></div>
+      <div class="bar-btns">
+        <button class="icon-btn" id="themeBtn" title="切换主题">☾</button>
+        <button class="icon-btn" id="resetPosBtn" title="回到左上角">⌂</button>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="datetime">
+        <span id="dateText">--</span>
+        <span class="time" id="clockText">--:--:--</span>
+      </div>
+
+      <div class="status-row">
+        <span class="status"><span class="dot idle" id="statusDot"></span><span id="statusText">未上班</span></span>
+        <span class="countdown" id="countdownText">--</span>
+      </div>
+
+      <div class="money-block">
+        <div class="money-label">今日已赚（元）</div>
+        <div class="money"><span class="rmb">¥</span><span id="moneyText">0.00000</span></div>
+        <div class="money-sub" id="rateText">--</div>
+      </div>
+
+      <!-- SECTION: wish list container -->
+      <div class="wish-list" id="wishList"></div>
+
+      <!-- SECTION: fun conversion container -->
+      <div class="fun-block">
+        <div class="fun-title">🎁 趣味折算 · 今天已赚的钱够…</div>
+        <div class="fun" id="funList"></div>
+      </div>
+
+      <div class="progress-block">
+        <div class="progress-head">
+          <span>今日工时进度</span>
+          <span id="progressPct">0%</span>
+        </div>
+        <div class="track"><div class="fill" id="progressFill"></div></div>
+      </div>
+
+      <div class="month">
+        <span>本月累计估算收入</span>
+        <span class="amt" id="monthIncome">¥0.00</span>
+      </div>
+
+      <div class="settings-entry">
+        <button class="wide-btn" id="openSettings">⚙ 设置 · 薪资 / 作息 / 心愿</button>
+      </div>
+    </div>
+  </div>
+  <div class="hint" id="hint">提示：可用 Ctrl/Cmd + N 在新窗口打开本页，再缩小窗口贴到桌面角落使用；浏览器无法真正置顶于其他应用之上。</div>
+</div>
+
+<!-- SECTION: settings modal -->
+<div class="overlay" id="overlay">
+  <div class="panel">
+    <h2>⚙ 设置</h2>
+    <p class="tip">修改后立即重新计算；所有配置保存在浏览器本地，下次打开自动恢复。</p>
+
+    <div class="field-group">
+      <div class="g-title">💰 薪资</div>
+      <div class="f-row">
+        <div class="f"><label for="inDaily">日薪（元）</label><input id="inDaily" type="number" min="0" step="0.01"></div>
+        <div class="f"><label for="inMonthly">月薪（元）</label><input id="inMonthly" type="number" min="0" step="0.01"></div>
+      </div>
+      <div class="f-row">
+        <div class="f"><label for="inPayDays">每月计薪天数</label><input id="inPayDays" type="number" min="1" max="31" step="0.01"></div>
+        <div class="f" style="align-self:end"></div>
+      </div>
+    </div>
+
+    <div class="field-group">
+      <div class="g-title">⏰ 作息</div>
+      <div class="f-row">
+        <div class="f"><label for="inStart">上班时间</label><input id="inStart" type="time"></div>
+        <div class="f"><label for="inEnd">下班时间</label><input id="inEnd" type="time"></div>
+      </div>
+      <div class="f-row">
+        <div class="f"><label for="inLunchS">午休开始</label><input id="inLunchS" type="time"></div>
+        <div class="f"><label for="inLunchE">午休结束</label><input id="inLunchE" type="time"></div>
+      </div>
+      <p class="tip">午休结束时间留空或早于开始时间，视为无午休；午休不计入有效工作时间。</p>
+    </div>
+
+    <div class="field-group">
+      <div class="g-title">✨ 心愿清单（可添加多个，最多 8 个）</div>
+      <div id="wishEditList"></div>
+      <button class="add-wish" id="addWish" type="button">＋ 添加一个心愿</button>
+      <p class="tip">心愿进度 = 本月累计估算收入 ÷ 目标金额；攒够后自动标记达成。</p>
+    </div>
+
+    <div class="field-group">
+      <div class="g-title">🎁 趣味折算单价（可增删，最多 8 条）</div>
+      <div class="edit-row edit-head">
+        <span>图标</span><span>动词</span><span>名称</span><span>量词</span><span>单价</span><span></span>
+      </div>
+      <div id="funEditList"></div>
+      <button class="add-wish" id="addFun" type="button">＋ 添加一条折算</button>
+      <p class="tip">按「今日已赚」实时折算，例如 650 元 ÷ 18 元奶茶 = 已够喝 36.1 杯。单价留空或为 0 的条目不显示。</p>
+    </div>
+
+    <div class="field-group">
+      <div class="g-title">🎨 主题</div>
+      <div class="theme-switch">
+        <button class="wide-btn" id="btnDark">深色磨砂</button>
+        <button class="wide-btn" id="btnLight">浅色柔和</button>
+      </div>
+    </div>
+
+    <div class="err" id="errMsg"></div>
+    <div class="panel-actions">
+      <button class="btn-ghost" id="btnCancel">取消</button>
+      <button class="btn-primary" id="btnSave">保存并应用</button>
+    </div>
+  </div>
+</div>
+
+<!-- SECTION: templates（结构静态，动态值运行时注入） -->
+<template id="wishRowTpl">
+  <div class="wish">
+    <div class="wish-head">
+      <span class="wish-name"></span>
+      <span class="wish-pct"></span>
+    </div>
+    <div class="wish-goal"></div>
+    <div class="mini-track"><div class="mini-fill"></div></div>
+  </div>
+</template>
+
+<template id="wishEditTpl">
+  <div class="wish-edit">
+    <div>
+      <span class="we-label">心愿名称</span>
+      <input type="text" class="we-name" maxlength="20">
+    </div>
+    <div>
+      <span class="we-label">目标金额（元）</span>
+      <input type="number" class="we-goal" min="0" step="1">
+    </div>
+    <button class="we-del" type="button" title="删除这个心愿">✕</button>
+  </div>
+</template>
+
+<template id="funPillTpl">
+  <span class="fun-pill">
+    <span class="fun-emoji"></span><span class="fun-verb"></span><span class="fun-num"></span><span class="fun-post"></span>
+  </span>
+</template>
+
+<template id="funEditTpl">
+  <div class="edit-row">
+    <div>
+      <input type="text" class="fe-emoji" maxlength="4">
+    </div>
+    <div>
+      <input type="text" class="fe-verb" maxlength="2">
+    </div>
+    <div>
+      <input type="text" class="fe-name" maxlength="10">
+    </div>
+    <div>
+      <input type="text" class="fe-unit" maxlength="2">
+    </div>
+    <div>
+      <input type="number" class="fe-price" min="0.01" step="0.5">
+    </div>
+    <button class="er-del" type="button" title="删除这条折算">✕</button>
+  </div>
+</template>
+
+<script>
+/* SECTION: storage & defaults */
+const STORE_KEY = "sala…g-v2";
+const DEFAULT_WISHES = [
+  { name: "换新手机", goal: 6000 },
+  { name: "云南旅游基金", goal: 8000 },
+  { name: "攒首付", goal: 120000 }
+];
+const DEFAULT_FUN = [
+  { emoji: "🧋", verb: "喝", name: "奶茶", unit: "杯", price: 18 },
+  { emoji: "🍔", verb: "吃", name: "快餐", unit: "顿", price: 30 },
+  { emoji: "☕", verb: "买", name: "咖啡", unit: "杯", price: 25 },
+  { emoji: "🎬", verb: "看", name: "电影", unit: "场", price: 45 }
+];
+const DEFAULTS = {
+  dailyWage: 200,
+  monthlyWage: 4350,      // 默认 = 日薪 200 × 计薪天数 21.75
+  workStart: "09:00",
+  workEnd: "18:00",
+  lunchStart: "12:00",
+  lunchEnd: "13:00",
+  payDays: 21.75,
+  wishes: DEFAULT_WISHES.map(w => ({ name: w.name, goal: w.goal })),
+  fun: DEFAULT_FUN.map(f => ({ emoji: f.emoji, verb: f.verb, name: f.name, unit: f.unit, price: f.price })),
+  theme: "dark",
+  posX: null, posY: null
+};
+function normalizeWishes(list) {
+  if (!Array.isArray(list)) return [];
+  return list.filter(w => w && typeof w === "object")
+             .slice(0, 8)
+             .map(w => ({
+               name: String(w.name || "").slice(0, 20) || "心愿",
+               goal: Math.max(0, Number(w.goal) || 0)
+             }));
+}
+function normalizeFun(list) {
+  if (!Array.isArray(list)) return [];
+  return list.filter(f => f && typeof f === "object")
+             .slice(0, 8)
+             .map(f => ({
+               emoji: String(f.emoji || "").slice(0, 4),
+               verb: String(f.verb || "").slice(0, 2),
+               name: String(f.name || "").slice(0, 10) || "物品",
+               unit: String(f.unit || "").slice(0, 2) || "份",
+               price: Math.max(0, Number(f.price) || 0)
+             }));
+}
+function loadConfig() {
+  let merged = { ...DEFAULTS };
+  try {
+    const raw = localStorage.getItem(STORE_KEY);
+    if (raw) merged = { ...DEFAULTS, ...JSON.parse(raw) };
+    else {
+      // 从 v1 的单心愿版本迁移
+      const old = localStorage.getItem("sala…g-v1");
+      if (old) {
+        const o = JSON.parse(old);
+        if (o.wishName || o.wishGoal) {
+          merged.wishes = [{ name: String(o.wishName || "心愿").slice(0, 20), goal: Math.max(0, Number(o.wishGoal) || 0) }];
+        }
+      }
+    }
+  } catch (e) { merged = { ...DEFAULTS }; }
+  merged.wishes = normalizeWishes(merged.wishes);
+  if (!merged.wishes.length) merged.wishes = DEFAULT_WISHES.map(w => ({ name: w.name, goal: w.goal }));
+  merged.fun = normalizeFun(merged.fun);
+  if (!merged.fun.length) merged.fun = DEFAULT_FUN.map(f => ({ emoji: f.emoji, verb: f.verb, name: f.name, unit: f.unit, price: f.price }));
+  return merged;
+}
+function saveConfig() {
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(cfg)); } catch (e) {}
+}
+let cfg = loadConfig();
+
+/* SECTION: helpers */
+const $ = id => document.getElementById(id);
+function toSec(hhmm) {
+  if (!hhmm) return null;
+  const m = /^(\d{1,2}):(\d{2})/.exec(hhmm);
+  if (!m) return null;
+  return (+m[1]) * 3600 + (+m[2]) * 60;
+}
+function clamp(v, lo, hi) { return Math.min(hi, Math.max(lo, v)); }
+function fmtHMS(sec) {
+  sec = Math.max(0, Math.floor(sec));
+  const h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60), s = sec % 60;
+  return String(h).padStart(2, "0") + ":" + String(m).padStart(2, "0") + ":" + String(s).padStart(2, "0");
+}
+function weekdayShort(d) { return ["周日","周一","周二","周三","周四","周五","周六"][d.getDay()]; }
+
+/* SECTION: core computation
+   有效工作秒数 = 上班后经过秒数 - 已发生的午休重叠秒数
+   今日已赚 = 日薪 × 今日已有效工作秒 ÷ 每日有效工作总秒
+   上班前 0；下班后全额；午休期间公式自然冻结（暂停增长） */
+function computeState(now) {
+  const daySec = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds() + now.getMilliseconds() / 1000;
+  const ws = toSec(cfg.workStart), we = toSec(cfg.workEnd);
+  const ls = toSec(cfg.lunchStart), le = toSec(cfg.lunchEnd);
+  const hasLunch = ls !== null && le !== null && le > ls && we !== null && ws !== null && ls > ws && le < we;
+  const valid = ws !== null && we !== null && we > ws;
+
+  const out = { valid, ws, we, daySec, status: "未上班", statusKey: "idle",
+                effSec: 0, totalEff: 0, ratio: 0, amount: 0, remain: null };
+  if (!valid) return out;
+
+  const lunchDur = hasLunch ? (le - ls) : 0;
+  out.totalEff = (we - ws) - lunchDur;
+  if (out.totalEff <= 0) { out.totalEff = we - ws; }
+
+  const elapsed = clamp(daySec, ws, we) - ws;
+  const lunchOverlap = hasLunch ? Math.max(0, Math.min(daySec, le, we) - Math.max(ws, ls)) : 0;
+  out.effSec = clamp(elapsed - lunchOverlap, 0, out.totalEff);
+  out.ratio = out.effSec / out.totalEff;
+  out.amount = cfg.dailyWage * out.ratio;
+  out.remain = we - daySec;
+
+  if (daySec < ws) { out.status = "未上班"; out.statusKey = "idle"; out.amount = 0; out.ratio = 0; }
+  else if (hasLunch && daySec >= ls && daySec < le) { out.status = "午休中"; out.statusKey = "lunch"; }
+  else if (daySec < we) { out.status = "工作中"; out.statusKey = "working"; }
+  else { out.status = "已下班"; out.statusKey = "off"; out.amount = cfg.dailyWage; out.ratio = 1; }
+  return out;
+}
+
+/* 本月累计估算：月薪 ×（本月已完成工作日数 + 今日进度）÷ 每月计薪天数，工作日按周一至周五 */
+function monthEstimate(st, now) {
+  if (!st.valid) return 0;
+  const y = now.getFullYear(), mo = now.getMonth(), today = now.getDate();
+  let doneWeekdays = 0;
+  for (let d = 1; d < today; d++) {
+    const wd = new Date(y, mo, d).getDay();
+    if (wd !== 0 && wd !== 6) doneWeekdays++;
+  }
+  const todayWd = now.getDay();
+  const todayProg = (todayWd === 0 || todayWd === 6) ? 0 : clamp(st.ratio, 0, 1);
+  const base = cfg.monthlyWage > 0 ? cfg.monthlyWage : cfg.dailyWage * cfg.payDays;
+  const pd = cfg.payDays > 0 ? cfg.payDays : 21.75;
+  return base * (doneWeekdays + todayProg) / pd;
+}
+
+/* SECTION: smooth money (requestAnimationFrame)
+   每帧根据系统时间算出目标金额，显示值以指数平滑逼近目标；
+   非工作时间目标恒定，收敛后静止，不继续递增 */
+let displayed = -1;
+function moneyTick(st, dt) {
+  const target = st.amount;
+  if (displayed < 0) displayed = target;
+  const diff = target - displayed;
+  if (Math.abs(diff) < 0.000008) { displayed = target; return; }
+  const k = 1 - Math.exp(-5 * dt);
+  displayed += diff * k;
+  if (target - displayed < 0) displayed = Math.min(displayed, target);
+}
+
+/* SECTION: wish list render */
+let wishRows = [];
+function rebuildWishList() {
+  const box = $("wishList");
+  box.textContent = "";
+  const tpl = $("wishRowTpl");
+  wishRows = cfg.wishes.map(w => {
+    const node = tpl.content.firstElementChild.cloneNode(true);
+    box.appendChild(node);
+    return {
+      root: node,
+      name: node.querySelector(".wish-name"),
+      pct: node.querySelector(".wish-pct"),
+      goal: node.querySelector(".wish-goal"),
+      fill: node.querySelector(".mini-fill")
+    };
+  });
+}
+function updateWishList(mInc) {
+  for (let i = 0; i < wishRows.length; i++) {
+    const w = cfg.wishes[i], r = wishRows[i];
+    if (!w || !r) continue;
+    const goal = w.goal > 0 ? w.goal : 0;
+    const done = goal > 0 && mInc >= goal;
+    const pct = goal > 0 ? clamp(mInc / goal * 100, 0, 100) : 0;
+    r.name.textContent = w.name || "心愿";
+    r.pct.textContent = goal > 0 ? (done ? "已达成 ✓" : pct.toFixed(1) + "%") : "未设目标";
+    r.goal.textContent = goal > 0
+      ? ("目标 ¥" + goal.toFixed(2) + " · 已攒 ¥" + Math.min(mInc, goal).toFixed(2))
+      : "在设置中填写目标金额";
+    r.fill.style.width = pct.toFixed(2) + "%";
+    r.root.classList.toggle("done", done);
+  }
+}
+
+/* SECTION: fun conversion render（趣味折算，按今日已赚实时换算） */
+let funPills = [];
+function rebuildFunList() {
+  const box = $("funList");
+  box.textContent = "";
+  const tpl = $("funPillTpl");
+  funPills = cfg.fun.map(f => {
+    if (!(f.price > 0)) return null;              // 单价无效则不显示
+    const node = tpl.content.firstElementChild.cloneNode(true);
+    box.appendChild(node);
+    node.querySelector(".fun-emoji").textContent = f.emoji ? (f.emoji + " ") : "";
+    node.querySelector(".fun-verb").textContent = "已够" + (f.verb || "");
+    node.querySelector(".fun-post").textContent = " " + f.unit + " " + f.name;
+    return { root: node, num: node.querySelector(".fun-num"), price: f.price };
+  }).filter(Boolean);
+}
+function updateFunList(amount) {
+  for (const p of funPills) {
+    const count = amount > 0 ? amount / p.price : 0;
+    p.num.textContent = count >= 100 ? count.toFixed(0) : count.toFixed(1);
+  }
+}
+
+/* SECTION: render loop */
+let lastT = performance.now();
+function frame() {
+  const t0 = performance.now();
+  const dt = Math.min(0.25, (t0 - lastT) / 1000);
+  lastT = t0;
+  const now = new Date();
+  const st = computeState(now);
+  moneyTick(st, dt);
+
+  $("moneyText").textContent = displayed.toFixed(5);
+  $("dateText").textContent = now.getFullYear() + "-" +
+    String(now.getMonth() + 1).padStart(2, "0") + "-" +
+    String(now.getDate()).padStart(2, "0") + " " + weekdayShort(now);
+  $("clockText").textContent = String(now.getHours()).padStart(2, "0") + ":" +
+    String(now.getMinutes()).padStart(2, "0") + ":" + String(now.getSeconds()).padStart(2, "0");
+
+  $("statusDot").className = "dot " + st.statusKey;
+  $("statusText").textContent = st.status;
+
+  if (!st.valid) {
+    $("countdownText").textContent = "作息设置无效";
+  } else if (st.statusKey === "off") {
+    $("countdownText").textContent = "今日已收工";
+  } else if (st.statusKey === "idle") {
+    $("countdownText").textContent = "距上班 " + fmtHMS(st.ws - st.daySec);
+  } else {
+    $("countdownText").textContent = "距下班 " + fmtHMS(st.remain);
+  }
+
+  const pct = clamp(st.ratio, 0, 1) * 100;
+  $("progressFill").style.width = pct.toFixed(2) + "%";
+  $("progressPct").textContent = pct.toFixed(1) + "%";
+
+  if (st.valid && st.totalEff > 0) {
+    $("rateText").textContent = "有效工时 " + fmtHMS(st.effSec) + " / " + fmtHMS(st.totalEff) +
+      " · 时薪约 ¥" + (cfg.dailyWage / (st.totalEff / 3600)).toFixed(2);
+  } else {
+    $("rateText").textContent = "请在设置中配置有效的上下班时间";
+  }
+
+  const mInc = monthEstimate(st, now);
+  $("monthIncome").textContent = "¥" + mInc.toFixed(2);
+  updateWishList(mInc);
+  updateFunList(displayed);
+
+  requestAnimationFrame(frame);
+}
+
+/* SECTION: theme */
+function applyTheme() {
+  const light = cfg.theme === "light";
+  document.body.dataset.theme = light ? "light" : "dark";
+  document.documentElement.dataset.theme = light ? "light" : "dark";
+  $("themeBtn").textContent = light ? "☀" : "☾";
+  $("themeBtn").title = light ? "切换到深色主题" : "切换到浅色主题";
+  $("btnDark").classList.toggle("active", !light);
+  $("btnLight").classList.toggle("active", light);
+}
+$("themeBtn").addEventListener("click", () => {
+  cfg.theme = cfg.theme === "light" ? "dark" : "light";
+  applyTheme(); saveConfig();
+});
+$("btnDark").addEventListener("click", () => { cfg.theme = "dark"; applyTheme(); });
+$("btnLight").addEventListener("click", () => { cfg.theme = "light"; applyTheme(); });
+
+/* SECTION: drag (simulated floating window inside page) */
+const frameEl = $("frame"), dragBar = $("dragBar");
+function placeFrame() {
+  const maxX = Math.max(8, window.innerWidth - frameEl.offsetWidth - 8);
+  const maxY = Math.max(8, window.innerHeight - 60);
+  const x = clamp(cfg.posX == null ? 24 : cfg.posX, 8, maxX);
+  const y = clamp(cfg.posY == null ? 24 : cfg.posY, 8, maxY);
+  frameEl.style.left = x + "px";
+  frameEl.style.top = y + "px";
+  cfg.posX = x; cfg.posY = y;
+}
+window.addEventListener("resize", placeFrame);
+(function () {
+  let dragging = false, offX = 0, offY = 0;
+  dragBar.addEventListener("pointerdown", e => {
+    if (e.target.closest("button")) return;
+    dragging = true;
+    const r = frameEl.getBoundingClientRect();
+    offX = e.clientX - r.left; offY = e.clientY - r.top;
+    dragBar.setPointerCapture(e.pointerId);
+  });
+  dragBar.addEventListener("pointermove", e => {
+    if (!dragging) return;
+    const maxX = Math.max(8, window.innerWidth - frameEl.offsetWidth - 8);
+    const maxY = Math.max(8, window.innerHeight - 60);
+    cfg.posX = clamp(e.clientX - offX, 8, maxX);
+    cfg.posY = clamp(e.clientY - offY, 8, maxY);
+    frameEl.style.left = cfg.posX + "px";
+    frameEl.style.top = cfg.posY + "px";
+  });
+  const stop = () => { if (dragging) { dragging = false; saveConfig(); } };
+  dragBar.addEventListener("pointerup", stop);
+  dragBar.addEventListener("pointercancel", stop);
+})();
+$("resetPosBtn").addEventListener("click", () => {
+  cfg.posX = 24; cfg.posY = 24; placeFrame(); saveConfig();
+});
+
+/* SECTION: wish editor（设置面板里的多心愿增删改） */
+function renderWishEditor() {
+  const box = $("wishEditList");
+  box.textContent = "";
+  const tpl = $("wishEditTpl");
+  cfg.wishes.forEach(w => {
+    const node = tpl.content.firstElementChild.cloneNode(true);
+    const name = node.querySelector(".we-name");
+    const goal = node.querySelector(".we-goal");
+    const del = node.querySelector(".we-del");
+    name.value = w.name;
+    goal.value = w.goal;
+    name.setAttribute("aria-label", "心愿名称");
+    goal.setAttribute("aria-label", "心愿目标金额（元）");
+    del.addEventListener("click", () => {
+      const idx = Array.prototype.indexOf.call(box.children, node);
+      if (cfg.wishes.length <= 1) { $("errMsg").textContent = "至少要保留一个心愿。"; return; }
+      if (idx > -1) cfg.wishes.splice(idx, 1);
+      renderWishEditor();
+    });
+    box.appendChild(node);
+  });
+}
+$("addWish").addEventListener("click", () => {
+  if (cfg.wishes.length >= 8) { $("errMsg").textContent = "最多添加 8 个心愿。"; return; }
+  $("errMsg").textContent = "";
+  cfg.wishes.push({ name: "新心愿", goal: 5000 });
+  renderWishEditor();
+});
+
+/* SECTION: fun editor（设置面板里的折算条目增删改） */
+function renderFunEditor() {
+  const box = $("funEditList");
+  box.textContent = "";
+  const tpl = $("funEditTpl");
+  cfg.fun.forEach(f => {
+    const node = tpl.content.firstElementChild.cloneNode(true);
+    const emoji = node.querySelector(".fe-emoji");
+    const verb = node.querySelector(".fe-verb");
+    const name = node.querySelector(".fe-name");
+    const unit = node.querySelector(".fe-unit");
+    const price = node.querySelector(".fe-price");
+    const del = node.querySelector(".er-del");
+    emoji.value = f.emoji;
+    verb.value = f.verb;
+    name.value = f.name;
+    unit.value = f.unit;
+    price.value = f.price;
+    emoji.setAttribute("aria-label", "图标（可填表情，留空则不显示）");
+    verb.setAttribute("aria-label", "动词，如 喝 / 吃 / 买");
+    name.setAttribute("aria-label", "名称");
+    unit.setAttribute("aria-label", "量词");
+    price.setAttribute("aria-label", "单价（元）");
+    del.addEventListener("click", () => {
+      const idx = Array.prototype.indexOf.call(box.children, node);
+      if (cfg.fun.length <= 1) { $("errMsg").textContent = "至少要保留一条折算。"; return; }
+      if (idx > -1) cfg.fun.splice(idx, 1);
+      renderFunEditor();
+    });
+    box.appendChild(node);
+  });
+}
+$("addFun").addEventListener("click", () => {
+  if (cfg.fun.length >= 8) { $("errMsg").textContent = "最多添加 8 条折算。"; return; }
+  $("errMsg").textContent = "";
+  cfg.fun.push({ emoji: "🍕", verb: "吃", name: "新条目", unit: "份", price: 30 });
+  renderFunEditor();
+});
+
+/* SECTION: settings panel */
+const overlay = $("overlay");
+function openSettings() {
+  $("inDaily").value = cfg.dailyWage;
+  $("inMonthly").value = cfg.monthlyWage;
+  $("inPayDays").value = cfg.payDays;
+  $("inStart").value = cfg.workStart;
+  $("inEnd").value = cfg.workEnd;
+  $("inLunchS").value = cfg.lunchStart;
+  $("inLunchE").value = cfg.lunchEnd;
+  $("errMsg").textContent = "";
+  renderWishEditor();
+  renderFunEditor();
+  applyTheme();
+  overlay.classList.add("open");
+}
+function closeSettings() { overlay.classList.remove("open"); }
+$("openSettings").addEventListener("click", openSettings);
+$("btnCancel").addEventListener("click", closeSettings);
+overlay.addEventListener("click", e => { if (e.target === overlay) closeSettings(); });
+
+$("btnSave").addEventListener("click", () => {
+  const daily = parseFloat($("inDaily").value);
+  const monthly = parseFloat($("inMonthly").value);
+  const payDays = parseFloat($("inPayDays").value);
+  const ws = $("inStart").value, we = $("inEnd").value;
+  const ls = $("inLunchS").value, le = $("inLunchE").value;
+  const wsS = toSec(ws), weS = toSec(we);
+  const lsS = toSec(ls), leS = toSec(le);
+
+  if (isNaN(daily) || daily < 0) return void ($("errMsg").textContent = "日薪需要是不小于 0 的数字。");
+  if (isNaN(monthly) || monthly < 0) return void ($("errMsg").textContent = "月薪需要是不小于 0 的数字。");
+  if (isNaN(payDays) || payDays <= 0 || payDays > 31) return void ($("errMsg").textContent = "每月计薪天数需要在 1–31 之间。");
+  if (wsS === null || weS === null) return void ($("errMsg").textContent = "请填写完整的上班和下班时间。");
+  if (weS <= wsS) return void ($("errMsg").textContent = "下班时间必须晚于上班时间。");
+  if (ls && le && leS <= lsS) return void ($("errMsg").textContent = "午休结束必须晚于开始；不需要午休可留空。");
+  if ((ls || le) && !(lsS !== null && leS !== null && lsS > wsS && leS < weS)) {
+    return void ($("errMsg").textContent = "午休时间需要完整落在上班时间内。");
+  }
+
+  const rows = Array.prototype.slice.call($("wishEditList").children);
+  if (!rows.length) return void ($("errMsg").textContent = "请至少保留一个心愿。");
+  const wishes = rows.map(n => ({
+    name: n.querySelector(".we-name").value.trim() || "心愿",
+    goal: Math.max(0, parseFloat(n.querySelector(".we-goal").value) || 0)
+  }));
+
+  const funRows = Array.prototype.slice.call($("funEditList").children);
+  if (!funRows.length) return void ($("errMsg").textContent = "请至少保留一条趣味折算。");
+  const fun = funRows.map(n => ({
+    emoji: n.querySelector(".fe-emoji").value.trim().slice(0, 4),
+    verb: n.querySelector(".fe-verb").value.trim().slice(0, 2),
+    name: n.querySelector(".fe-name").value.trim().slice(0, 10) || "物品",
+    unit: n.querySelector(".fe-unit").value.trim().slice(0, 2) || "份",
+    price: Math.max(0, parseFloat(n.querySelector(".fe-price").value) || 0)
+  }));
+
+  cfg.dailyWage = daily;
+  cfg.monthlyWage = monthly;
+  cfg.payDays = payDays;
+  cfg.workStart = ws; cfg.workEnd = we;
+  cfg.lunchStart = ls || ""; cfg.lunchEnd = le || "";
+  cfg.wishes = wishes;
+  cfg.fun = fun;
+  displayed = -1;                 // 下次循环重新对齐新目标金额，避免跨档位乱滚
+  rebuildWishList();
+  rebuildFunList();
+  applyTheme();
+  saveConfig();
+  closeSettings();
+});
+
+/* SECTION: init */
+rebuildWishList();
+rebuildFunList();
+applyTheme();
+placeFrame();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
